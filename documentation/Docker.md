@@ -10,15 +10,13 @@ An OCI compatible container runtime is required to run the project. Docker is ad
 
 To build a Docker image for the application run the following command:
 
-    make docker-build
-
-After which the application is accesible on the adres: http://localhost:8080
+    make docker-compose-build
 
 To run the application stack use the following command:
 
     make docker-compose-up
 
-The command will wait for the stack to come up completely and be in a healthy state. After which logs can be streamed using:
+The command will wait for the stack to come up completely and be in a healthy state. After which the application is accesible on the adres: http://localhost:8080. Logs can be streamed using:
 
     make docker-compose-logs
 
@@ -32,4 +30,10 @@ This will keep transient data (databases, etc). The stack can be brought up agai
 
 To completely stop and remove all data from the instance run:
 
-    make compose-down-remove-volumes
+    make docker-compose-down-remove-volumes
+
+## References
+
+- https://docs.docker.com/compose/compose-file/
+- https://github.com/compose-spec/compose-spec/blob/master/spec.md
+- https://docs.docker.com/compose/extends/
