@@ -1,5 +1,3 @@
-version: '2.1'
-
 services:
   webserver:
     image: $DOCKER_IMAGE_HTTPD
@@ -305,3 +303,5 @@ networks:
       config:
       - subnet: $IPV6_SUBNET_PUBLIC
         gateway: $IPV6_GATEWAY_PUBLIC
+      - subnet: $IPV4_SUBNET_PUBLIC
+

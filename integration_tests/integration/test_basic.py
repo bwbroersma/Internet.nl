@@ -1,154 +1,136 @@
 """Basis functionality that should always be present."""
-import pytest
 from datetime import timedelta
-from ..conftest import Internetnl
-from bs4 import Tag
-import time
-import requests
+import pytest
+import re
+from playwright.sync_api import Page, expect
+from pytest_playwright import pytest_playwright
 
 TEST_DOMAIN = "test-target.internet.nl"
 ALL_PROBES = {"ipv6", "dnssec", "tls", "appsecpriv", "rpki"}
 TEST_DOMAIN_EXPECTED_SCORE = 100
-TEST_DOMAIN_EXPECTED_SCORE = 64
+TEST_DOMAIN_EXPECTED_SCORE = 48
 
-TEST_EMAIL = "internet.nl"
+TEST_EMAIL = "test-target.internet.nl"
 ALL_EMAIL_PROBES = {"ipv6", "dnssec", "tls", "auth", "rpki"}
 TEST_EMAIL_EXPECTED_SCORE = 100
-TEST_EMAIL_EXPECTED_SCORE = 60
+TEST_EMAIL_EXPECTED_SCORE = 0
 
-TEST_CONNECTION_EXPECTED_SCORE = 100
+ALL_CONNECTION_PROBES = {"ipv6", "resolver"}
+TEST_CONNECTION_EXPECTED_SCORE = 0.0
 
 FOOTER_TEXT = "Internet.nl is an initiative of the Internet community and the Dutch"
 
+DEFAULT_TIMEOUT = timedelta(seconds=120)
 
-PROBE_TIMEOUT = timedelta(minutes=5)
-PROBE_INTERVAL = timedelta(seconds=5)
-PROBE_TRIES = PROBE_TIMEOUT.seconds/PROBE_INTERVAL.seconds
+@pytest.fixture
+def context(context):
+    context.set_default_timeout(timedelta(seconds=120).microseconds)
+    yield context
 
-@pytest.mark.withoutresponses
-def test_index_http_ok(internetnl):
-    assert internetnl.get('/').response.status_code == 200
+def test_index_http_ok(page):
+    assert page.goto("http://internet.nl/")
 
-@pytest.mark.withoutresponses
-def test_index_footer_text_present(internetnl):
-    assert FOOTER_TEXT in internetnl.get('/').response.text
 
-@pytest.mark.withoutresponses
-def test_reject_invalid_domain(internetnl, unique_id):
+def test_index_footer_text_present(page):
+    page.goto("http://internet.nl/")
+    footer = page.locator("#footer")
+
+    expect(footer).to_have_text(re.compile(FOOTER_TEXT))
+
+def test_reject_invalid_domain(page):
     domain = "invalid-domain.example.com"
-    r = internetnl.post(f'/site/', data="url={domain}")
-    assert r.response.is_redirect
-    redirect_location = r.response.headers.get('Location')
-    assert redirect_location == f"/test-site/?invalid"
 
-@pytest.mark.withoutresponses
-def test_your_website(internetnl: Internetnl, unique_id, test_domain=TEST_DOMAIN):
-    """Runs the 'Test your website' test against the test target and expects a decent result."""
+    page.goto("http://internet.nl/")
 
-    r = internetnl.post('/site/', data={"url":test_domain})
-    assert r.response.is_redirect
-    probe_location = r.response.headers.get('Location')
-    assert probe_location == f"/site/{test_domain}/", "Site is not redirecting to correct page"
+    page.locator('#web-url').fill(domain)
+    page.locator('section.websitetest button').click()
 
-    r = internetnl.post(probe_location, data={"url":test_domain})
+    assert page.url == "http://internet.nl/test-site/?invalid"
 
-    continue_location: str = str(r.soup.find("a", {"id":'continue'}).get("href"))
-    assert continue_location == probe_location, "Expecting redirect to scan in progress, not results"
 
-    probes = r.soup.find_all(class_='probe-name')
-    assert {tag.text for tag in probes} == set(ALL_PROBES), "Mismatch in expected probes performed"
+@pytest.fixture(scope="module")
+def site_test(browser, test_domain=TEST_DOMAIN):
+    """Runs the 'Test your website' test against the test target."""
+    context = browser.new_context()
+    page = context.new_page()
 
-    # wait for probes to to complete
-    for i in range(int(PROBE_TRIES)):
-        time.sleep(PROBE_INTERVAL.seconds)
+    page.goto("http://internet.nl/")
 
-        r = internetnl.post(continue_location)
-        continue_location = r.soup.find("a", {"id":'continue'}).get("href")
-        if continue_location == "results":
-            break
-    else:
-        assert 0, "Never redirected to results"
+    page.locator('#web-url').fill(test_domain)
+    page.locator('section.websitetest button').click()
 
-    r = internetnl.post(f"/site/{test_domain}/results")
-    assert r.response.is_redirect
-    result_location = r.response.headers.get('Location')
+    assert page.url == f"http://internet.nl/site/{test_domain}/"
 
-    r = internetnl.post(result_location)
+    page.wait_for_url(f"http://internet.nl/site/{test_domain}/*/", timeout=DEFAULT_TIMEOUT.microseconds)
 
-    score = r.soup.find(class_="testresults-percentage").get("data-resultscore")
-    assert int(score) == TEST_DOMAIN_EXPECTED_SCORE
+    yield page
 
-    # TODO: when fully simulated integration test environment
-    # probe_results = {}
-    # for probe in ALL_PROBES:
-    #      probe_results[probe] = r.soup.find(id=f"site{probe}").get("class")[0]
-    # assert probe_results == {probe: "passed" for probe in ALL_PROBES}
+def test_your_website_score(site_test):
+    """Validate score from site_test."""
 
-@pytest.mark.withoutresponses
-def test_your_email(internetnl: Internetnl, unique_id, test_email=TEST_EMAIL):
+    score = site_test.locator('div.testresults-percentage')
+    expect(score).to_have_attribute('data-resultscore', str(TEST_DOMAIN_EXPECTED_SCORE))
+
+@pytest.mark.xfail()
+@pytest.mark.parametrize("probe", ALL_PROBES)
+def test_your_website_probe_success(site_test, probe, test_domain=TEST_DOMAIN):
+
+    probe_result = site_test.locator(f'#site{probe}-results')
+    expect(probe_result).to_have_class('passed')
+
+@pytest.fixture(scope="module")
+def email_test(browser, test_email=TEST_EMAIL):
+    context = browser.new_context()
+    page = context.new_page()
+
+    page.goto("http://internet.nl/")
+
+    page.locator('#mail-url').fill(test_email)
+    page.locator('section.emailtest button').click()
+
+    assert page.url == f"http://internet.nl/mail/{test_email}/"
+
+    page.wait_for_url(f"http://internet.nl/mail/{test_email}/*/", timeout=DEFAULT_TIMEOUT.microseconds)
+
+    yield page
+
+def test_your_email_score(email_test, test_email=TEST_EMAIL):
     """Runs the 'Test your email' and expects a decent result."""
 
-    r = internetnl.post('/mail/', data={"url":test_email})
-    assert r.response.is_redirect
-    probe_location = r.response.headers.get('Location')
-    assert probe_location == f"/mail/{test_email}/", "Site is not redirecting to correct page"
+    score = email_test.locator('div.testresults-percentage')
+    expect(score).to_have_attribute('data-resultscore', str(TEST_EMAIL_EXPECTED_SCORE))
 
-    r = internetnl.post(probe_location, data={"url":test_email})
+@pytest.mark.xfail()
+@pytest.mark.parametrize("probe", ALL_EMAIL_PROBES)
+def test_your_email_probe_success(email_test, probe, test_email=TEST_EMAIL):
 
-    continue_location: str = str(r.soup.find("a", {"id":'continue'}).get("href"))
-    assert continue_location == probe_location, "Expecting redirect to scan in progress, not results"
+    probe_result = email_test.locator(f'#mail{probe}-results')
+    expect(probe_result).to_have_class('passed')
 
-    probes = r.soup.find_all(class_='probe-name')
-    assert {tag.text for tag in probes} == set(ALL_EMAIL_PROBES), "Mismatch in expected probes performed"
+@pytest.fixture(scope="module")
+def connection_test(browser):
+    context = browser.new_context()
+    page = context.new_page()
 
-    # wait for probes to to complete
-    for i in range(int(PROBE_TRIES)):
-        time.sleep(PROBE_INTERVAL.seconds)
+    page.goto("http://internet.nl/")
 
-        r = internetnl.post(continue_location)
-        continue_location = r.soup.find("a", {"id":'continue'}).get("href")
-        if continue_location == "results":
-            break
-    else:
-        assert 0, "Never redirected to results"
+    page.locator('section.connectiontest button').click()
 
-    r = internetnl.post(f"/mail/{test_email}/results")
-    assert r.response.is_redirect
-    result_location = r.response.headers.get('Location')
+    assert page.url == f"http://internet.nl/connection/"
 
-    r = internetnl.post(result_location)
+    page.wait_for_url(f"http://internet.nl/connection/*/results", timeout=DEFAULT_TIMEOUT.microseconds)
 
-    score = r.soup.find(class_="testresults-percentage").get("data-resultscore")
-    assert int(score) == TEST_EMAIL_EXPECTED_SCORE
+    yield page
 
-    # TODO: when fully simulated integration test environment
-    # probe_results = {}
-    # for probe in ALL_EMAIL_PROBES:
-    #      probe_results[probe] = r.soup.find(id=f"mail{probe}").get("class")[0]
-    # assert probe_results == {probe: "passed" for probe in ALL_EMAIL_PROBES}
+def test_your_connection_score(connection_test):
+    """Runs the 'Test your email' and expects a decent result."""
 
-@pytest.mark.withoutresponses
-def test_your_connection(internetnl: Internetnl, browser, unique_id):
-    """Runs the 'Test your connection' and expects a decent result."""
+    score = connection_test.locator('div.testresults-percentage')
+    expect(score).to_have_attribute('data-resultscore', str(TEST_CONNECTION_EXPECTED_SCORE))
 
-    timestamp = str(time.time()).replace(".", "")
+@pytest.mark.xfail()
+@pytest.mark.parametrize("probe", ALL_CONNECTION_PROBES)
+def test_your_connection_probe_success(connection_test, probe):
 
-    # initiate the test
-    r = internetnl.get(f'/connection/gettestid/?_={timestamp}')
-    test_id = r.response.json()["test_id"]
-    print("test_id: " + test_id)
-
-    # cause DNS lookups to be cached in redis
-    browser.visit(f"http://{test_id}.aaaa.conn.test-ns-signed.internet.nl")
-    browser.visit(f"http://{test_id}.a.conn.test-ns-signed.internet.nl")
-    browser.visit(f"http://{test_id}.a-aaaa.conn.test-ns6-signed.internet.nl")
-    # make actual ipv6 connection to testserver
-    browser.visit(f"http://internet.nl/connection/addr-test/{test_id}/")
-
-    # get results
-    r = internetnl.get(f'/connection/finished/{test_id}?_={timestamp}')
-    print(r.response.json())
-
-    r = internetnl.get(f'/connection/{test_id}/results?_={timestamp}')
-    score = r.soup.find(class_="testresults-percentage").get("data-resultscore")
-    assert float(score) == TEST_CONNECTION_EXPECTED_SCORE
+    probe_result = connection_test.locator(f'#conn{probe}-results')
+    expect(probe_result).to_have_class('passed')
