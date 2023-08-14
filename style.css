@@ -1,0 +1,37 @@
+img.internetnl {
+  max-width: 100%;
+  height: auto;
+  float: none;
+  clear: both;
+  display: block;
+}
+button.internetnl:hover {
+    cursor: pointer;
+}
+button.internetnl:hover,
+button.internetnl:focus,
+button.internetnl:active {
+    background: #ffab4c;
+}
+button.internetnl {
+    display: block;
+    margin: 0 auto .5em;
+    background: #fff;
+    border: solid .3em #ffab4c;
+    font-family: 'robotobold', arial, sans-serif;
+    font-weight: bold;
+    font-size: 100%;
+    border-radius: 18px;
+    padding: .2em .5em;
+}
+.internetnl.emailfield:before {
+  content: '@';
+  background: #dadada;
+  width: 8%;
+  display: block;
+  float: left;
+  text-align: center;
+  height: 100%;
+  overflow: hidden;
+  padding: 2px 0;
+}
