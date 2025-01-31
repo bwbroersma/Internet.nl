@@ -652,6 +652,11 @@ components:
           maxItems: 3
           items:
             type: string
+        protocols_good:
+          type: array
+          description: List of GOOD protocols.
+          items:
+            type: string
         protocols_bad:
           type: array
           description: List of BAD protocols.
