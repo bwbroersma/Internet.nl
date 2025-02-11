@@ -313,6 +313,7 @@ services:
   # worker for queue with potential memory leak
   worker-nassl:
     # copy all attributes from 'worker' service and overwrite specific settings below
+    # this should not trigger an auto commit
     <<: *worker
     mem_limit: $WORKER_NASSL_MEMORY_LIMIT
     # disable swap by settings swap to the memory limit
