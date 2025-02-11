@@ -1,6 +1,6 @@
 # Docker container profiles overview
 
-This overview was last generated at 2025-02-11T22:39:58Z with `make update_container_documentation`.
+This overview was last generated at 2025-02-11T23:10:03Z with `make update_container_documentation`.
 
 
 | container             | profiles     | description                                                                                                                      |
@@ -9,7 +9,7 @@ This overview was last generated at 2025-02-11T22:39:58Z with `make update_conta
 | app                   |              | django container                                                                                                                 |
 | db-migrate            |              | django DB migrations, runs to completion and exits with 0                                                                        |
 | worker                |              |                                                                                                                                  |
-| worker-nassl          |              | worker for queue with potential memory leak...                                                                                   |
+| worker-nassl          |              | worker for queue with potential memory leak..                                                                                    |
 | worker-slow           |              | worker for slow and long running tasks that could require a lot of memory (eg: hof update)                                       |
 | beat                  |              | celery task queue                                                                                                                |
 | redis                 |              | redis caches state, also used for:<br>- MAC address lookup<br>- Django page cache<br>- client DNS resolver IPs in connectiontest |
