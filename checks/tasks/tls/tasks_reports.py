@@ -13,6 +13,7 @@ from django.db import transaction
 
 from checks import categories, scoring
 from checks.caa.retrieval import CAA_MSGID_INSUFFICIENT_POLICY
+from checks.hsts.evaluation import HSTSEvaluation
 from checks.models import (
     CipherOrderStatus,
     DaneStatus,
@@ -319,9 +320,12 @@ def save_results(model, results, addr, domain, category):
                 model.forced_https_score = result.get("forced_https_score")
                 model.http_compression_enabled = result.get("http_compression_enabled")
                 model.http_compression_score = result.get("http_compression_score")
-                model.hsts_enabled = result.get("hsts_enabled")
-                model.hsts_policies = result.get("hsts_policies")
-                model.hsts_score = result.get("hsts_score")
+                hsts_result = result.get("hsts_result")
+                model.hsts_enabled = hsts_result.hsts_enabled
+                model.hsts_policies = hsts_result.hsts_policies
+                model.hsts_errors = [ttti.to_dict() for ttti in hsts_result.errors]
+                model.hsts_recommendations = [ttti.to_dict() for ttti in hsts_result.recommendations]
+                model.hsts_score = hsts_result.score
 
     elif isinstance(category, categories.MailTls):
         for testname, result in results:
@@ -920,9 +924,7 @@ def do_web_http(af_ip_pairs, url, *args, **kwargs):
                     forced_https_score=scoring.WEB_TLS_FORCED_HTTPS_BAD,
                     http_compression_enabled=True,
                     http_compression_score=scoring.WEB_TLS_HTTP_COMPRESSION_BAD,
-                    hsts_enabled=False,
-                    hsts_policies=[],
-                    hsts_score=scoring.WEB_TLS_HSTS_BAD,
+                    hsts_result=HSTSEvaluation(),
                 )
 
     return ("http_checks", results)
